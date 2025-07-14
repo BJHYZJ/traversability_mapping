@@ -377,7 +377,7 @@ public:
         // 1.3 Initialize local occupancy grid map to unknown, height to -FLT_MAX
         std::fill(occupancyMap2DHeight.occupancy.data.begin(), occupancyMap2DHeight.occupancy.data.end(), -1);
         std::fill(occupancyMap2DHeight.height.begin(), occupancyMap2DHeight.height.end(), -FLT_MAX);
-        std::fill(occupancyMap2DHeight.costMap.begin(), occupancyMap2DHeight.costMap.end(), 0);
+        std::fill(occupancyMap2DHeight.cost_map.begin(), occupancyMap2DHeight.cost_map.end(), 0);
         
         // local map origin x and y
         localMapOriginPoint.x = robotPoint.x - localMapLength / 2;
@@ -452,7 +452,7 @@ public:
 
         occupancyMap2DHeight.occupancy.data.resize(occupancyMap2DHeight.occupancy.info.width * occupancyMap2DHeight.occupancy.info.height);
         occupancyMap2DHeight.height.resize(occupancyMap2DHeight.occupancy.info.width * occupancyMap2DHeight.occupancy.info.height);
-        occupancyMap2DHeight.costMap.resize(occupancyMap2DHeight.occupancy.info.width * occupancyMap2DHeight.occupancy.info.height);
+        occupancyMap2DHeight.cost_map.resize(occupancyMap2DHeight.occupancy.info.width * occupancyMap2DHeight.occupancy.info.height);
     }    
 
     bool getRobotPosition(){

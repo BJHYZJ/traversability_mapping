@@ -8,4 +8,4 @@ nav_msgs/OccupancyGrid occupancy
 float32[] height
 
 # cost map
-float32[] costMap
+float32[] cost_map

@@ -17,9 +17,9 @@
 
 #include <interactive_markers/interactive_marker_server.hpp> 
 
-#include <pluginlib/class_list_macros.hpp>          
+#include <pluginlib/class_list_macros.hpp>
 #include <nav2_core/global_planner.hpp>
-#include <nav2_costmap_2d/costmap_2d_ros.hpp> 
+#include <nav2_costmap_2d/costmap_2d_ros.hpp>
 
 #include <Eigen/Core>
 #include <opencv2/core/core.hpp>
@@ -67,9 +67,12 @@
 
 #include <elevation_msgs/msg/occupancy_elevation.hpp>
 
-using namespace std;
+// using namespace std; // 避免使用using namespace std;
 
-typedef pcl::PointXYZI  PointType;
+using std::vector;
+using std::string;
+
+typedef pcl::PointXYZI PointType;
 typedef struct kdtree kdtree_t;
 typedef struct kdres kdres_t;
 

@@ -37,10 +37,11 @@
 
   <!-- insert plugin lib -->
   <depend>pluginlib</depend>
-  <depend>nav_core</depend>
+  <depend>nav2_core</depend>
 
   <export>
-    <!-- export nav_core Planner Plugin XML -->
-    <pluginlib plugin="${prefix}/share/${PROJECT_NAME}/tm_planner_plugin.xml"/>
+    <!-- export nav2_core Planner Plugin XML -->
+    <pluginlib plugin="${prefix}/share/${PROJECT_NAME}/plugins/tm_planner_plugins.xml"/>
   </export>
+
 </package>

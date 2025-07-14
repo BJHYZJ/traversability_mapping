@@ -207,7 +207,7 @@ public:
                         if (newIdX < 0 || newIdX >= elevationMap.occupancy.info.width || newIdY < 0 || newIdY >= elevationMap.occupancy.info.height)
                             continue;
                         int index = newIdX + newIdY * elevationMap.occupancy.info.width;
-                        elevationMap.costMap[index] = std::max(elevationMap.costMap[index], std::sqrt(float(m*m+n*n)));
+                        elevationMap.cost_map[index] = std::max(elevationMap.cost_map[index], std::sqrt(float(m*m+n*n)));
                     }
                 }
             }
@@ -386,7 +386,7 @@ public:
         int index = rounded_x + rounded_y * elevationMap.occupancy.info.width;
 
         // close to obstacles within ... m
-        if (elevationMap.costMap[index] > 0)
+        if (elevationMap.cost_map[index] > 0)
             return true;
         
         return false;

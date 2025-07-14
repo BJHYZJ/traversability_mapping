@@ -44,13 +44,15 @@ find_package(nav_msgs REQUIRED)
 find_package(elevation_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(pluginlib REQUIRED)
-find_package(nav_core REQUIRED)
+find_package(nav2_core REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_transport REQUIRED)
 
 find_package(PCL REQUIRED QUIET)
+find_package(pcl_ros REQUIRED)
 find_package(OpenCV REQUIRED QUIET)
+find_package(pcl_conversions REQUIRED)
 
 
 include_directories(
@@ -85,6 +87,8 @@ ament_target_dependencies(traversability_map
   pcl_conversions
   pcl_ros
   OpenCV
+  cv_bridge
+  image_transport
 )
 
 # PRM Planner
@@ -123,10 +127,14 @@ add_library(tm_planner_lib SHARED
 )
 ament_target_dependencies(tm_planner_lib
   pluginlib
-  nav_core
+  nav2_core
   rclcpp
 )
 
+install(FILES plugin/tm_planner_plugins.xml
+  DESTINATION share/${PROJECT_NAME}/plugins
+)
+pluginlib_export_plugin_description_file(nav2_core plugins/tm_planner_plugins.xml)
 
 install(TARGETS
   traversability_filter
