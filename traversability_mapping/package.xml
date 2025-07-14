@@ -1,58 +1,46 @@
 <?xml version="1.0"?>
-<package>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>traversability_mapping</name>
-  <version>0.0.0</version>
-  <description>Traversability Mapping</description>
+  <version>0.1.0</version>
+  <description>
+    Traversability mapping algorithms and planner plugin for ROS 2 Humble.
+  </description>
 
-  <maintainer email="tshan3@stevens.edu">Tixiao Shan</maintainer>
+  <maintainer email="yanzhijie@buaa.edu.cn">yanzj</maintainer>
+  <license>BSD</license>
 
-  <license>TODO</license>
+  <!-- build tool -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <author >Tixiao Shan</author>
+  <!-- C++ client library -->
+  <depend>rclcpp</depend>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <!-- <depend>rclpy</depend> -->
 
-  <build_depend>roscpp</build_depend>
-  <run_depend>roscpp</run_depend>
-  <build_depend>rospy</build_depend>
-  <run_depend>rospy</run_depend>
-  <build_depend>ros_bridge</build_depend>
-  <run_depend>ros_bridge</run_depend>
-  
-  <build_depend>tf</build_depend>
-  <run_depend>tf</run_depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>elevation_msgs</depend>
 
-  <build_depend>pcl_ros</build_depend>
-  <run_depend>pcl_ros</run_depend>
-  <build_depend>pcl_conversions</build_depend>
-  <run_depend>pcl_conversions</run_depend>
+  <!-- TF2 -->
+  <depend>tf2_ros</depend>
 
-  <build_depend>cv_bridge</build_depend>
-  <run_depend>cv_bridge</run_depend>
+  <!-- PCL and OpenCV -->
+  <depend>pcl_ros</depend>
+  <depend>pcl_conversions</depend>
+  <depend>cv_bridge</depend>
+  <depend>image_transport</depend>
 
-  <build_depend>std_msgs</build_depend>
-  <run_depend>std_msgs</run_depend>
-  <build_depend>sensors_msgs</build_depend>
-  <run_depend>sensors_msgs</run_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <run_depend>geometry_msgs</run_depend>
-  <build_depend>nav_msgs</build_depend>
-  <run_depend>nav_msgs</run_depend>
-  <build_depend>pluginlib</build_depend>
-  <run_depend>pluginlib</run_depend>
-  <build_depend>nav_core</build_depend>
-  <run_depend>nav_core</run_depend>
-  <build_depend>elevation_msgs</build_depend>
-  <run_depend>elevation_msgs</run_depend>
+  <!-- interactive markers -->
+  <depend>interactive_markers</depend>
 
-  <build_depend>image_transport</build_depend>
-  <run_depend>image_transport</run_depend>
-
-  <build_depend>interactive_markers</build_depend>
-  <run_depend>interactive_markers</run_depend>
+  <!-- insert plugin lib -->
+  <depend>pluginlib</depend>
+  <depend>nav_core</depend>
 
   <export>
-    <nav_core plugin="${prefix}/src/library/tm_planner_plugin.xml" />
+    <!-- export nav_core Planner Plugin XML -->
+    <pluginlib plugin="${prefix}/share/${PROJECT_NAME}/tm_planner_plugin.xml"/>
   </export>
-  
 </package>
