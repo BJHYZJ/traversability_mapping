@@ -131,7 +131,7 @@ public:
     {
         // int cloudSize = laserCloud->points.size();
         int cloudSize = static_cast<int>(laserCloud->points.size());
-        RCLCPP_INFO(this->get_logger(), "[DEBUG] cloudSize: %d", cloudSize);
+        // RCLCPP_INFO(this->get_logger(), "[DEBUG] cloudSize: %d", cloudSize);
         for (int i = 0; i < cloudSize; ++i)
         {
             laserCloud->points[i].z -= 0.2f; // for visualization
@@ -420,10 +420,10 @@ public:
 
     void publishLocalMap()
     {
-        RCLCPP_INFO(this->get_logger(),
-            "subs—local: %zu, subs—height: %zu",
-            pubOccupancyMapLocal->get_subscription_count(),
-            pubOccupancyMapLocalHeight->get_subscription_count());
+        // RCLCPP_INFO(this->get_logger(),
+        //     "subs—local: %zu, subs—height: %zu",
+        //     pubOccupancyMapLocal->get_subscription_count(),
+        //     pubOccupancyMapLocalHeight->get_subscription_count());
 
         if (pubOccupancyMapLocal->get_subscription_count() == 0 &&
             pubOccupancyMapLocalHeight->get_subscription_count() == 0)
@@ -496,7 +496,7 @@ public:
                 }
             }
         }
-        RCLCPP_INFO(this->get_logger(), "[DEBUG] 发布地图时已知栅格数量: %d", known_count);
+        // RCLCPP_INFO(this->get_logger(), "[DEBUG] 发布地图时已知栅格数量: %d", known_count);
 
         occupancyMap2DHeight.header.frame_id = "map";
         occupancyMap2DHeight.occupancy.header.frame_id = "map";
