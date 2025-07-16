@@ -42,6 +42,7 @@
 
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_eigen/tf2_eigen.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 
 #include <vector>
@@ -59,15 +60,21 @@
 #include <thread>
 #include <mutex>
 
-#include "marker/Marker.h"
-#include "marker/MarkerArray.h"
+#include <visualization_msgs/msg/interactive_marker.hpp>
+#include <visualization_msgs/msg/interactive_marker_control.hpp>
+#include <visualization_msgs/msg/interactive_marker_feedback.hpp>
+#include <visualization_msgs/msg/interactive_marker_update.hpp>
 
-#include "planner/kdtree.h"
-#include "planner/cubic_spline_interpolator.h"
+#include <interactive_markers/menu_handler.hpp>
+#include <interactive_markers/interactive_marker_server.hpp>
+#include <interactive_markers/interactive_marker_client.hpp>
+
+
+
+// #include "planner/kdtree.h"
+// #include "planner/cubic_spline_interpolator.h"
 
 #include <elevation_msgs/msg/occupancy_elevation.hpp>
-
-// using namespace std; // 避免使用using namespace std;
 
 using std::vector;
 using std::string;

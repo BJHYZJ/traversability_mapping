@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>traversability_mapping</name>
-  <version>0.1.0</version>
+  <version>1.0.0</version>
   <description>
     Traversability mapping algorithms and planner plugin for ROS 2 Humble.
   </description>
@@ -34,14 +34,17 @@
 
   <!-- interactive markers -->
   <depend>interactive_markers</depend>
+  <depend>visualization_msgs</depend>
+  <depend>tf2_eigen</depend>
 
   <!-- insert plugin lib -->
   <depend>pluginlib</depend>
   <depend>nav2_core</depend>
 
-  <export>
-    <!-- export nav2_core Planner Plugin XML -->
+  <!-- <export>
     <pluginlib plugin="${prefix}/share/${PROJECT_NAME}/plugins/tm_planner_plugins.xml"/>
-  </export>
-
+  </export> -->
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export> 
 </package>

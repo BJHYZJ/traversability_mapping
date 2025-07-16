@@ -1,3 +1,10 @@
+# ros2 run
+```bash
+ros2 launch traversability_mapping offline.launch.py 
+ros2 bag play /home/yanzj/workspace/code/slam_ros2/src/rosbag2_2025_07_16-14_11_47
+```
+
+
 # Traversability Mapping and Motion Planning
 
 This repository contains code for a traversability mapping and motion plannign system for ROS compatible UGVs. The system takes in point cloud from a Velodyne VLP-16 Lidar and outputs a traversability map for autonomous navigation in real-time. A demonstration of the system can be found here -> https://www.youtube.com/watch?v=4pdBpeRGXmw
@@ -29,13 +36,14 @@ When you compile the code for the first time, you need to add "-j1" behind "catk
 1. Run the launch file:
 ```
 roslaunch traversability_mapping offline.launch
+
 ```
 
 2. Play existing bag files:
 ```
-rosbag play *.bag --clock --topic /velodyne_points /imu/data
+rosbag play *.bag --clock --topic /lidar_points /imu/data
 ```
-Notes: our system only needs /velodyne_points for input from bag files. However, a 3D SLAM method usually needs /imu/data.
+Notes: our system only needs /lidar_points for input from bag files. However, a 3D SLAM method usually needs /imu/data.
 
 ## Run the System (with real robot)
 
