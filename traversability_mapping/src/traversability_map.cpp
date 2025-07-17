@@ -2,7 +2,7 @@
 
 using std::placeholders::_1;
 
-class TraversabilityMapping : public rclcpp::Node
+class TraversabilityMapping : public rclcpp::Node, public std::enable_shared_from_this<TraversabilityMapping>
 {
 
 private:
@@ -14,7 +14,7 @@ private:
 
     tf2_ros::Buffer tf_buffer;
     // tf2_ros::TransformListener tf_listener;
-    std::unique_ptr<tf2_ros::TransformListener> tf_listener;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     geometry_msgs::msg::TransformStamped transform;
 
     // Subscriber
@@ -35,7 +35,7 @@ private:
     int mapArrayCount;
     std::vector<std::vector<int>> mapArrayInd;
     std::vector<std::vector<int>> predictionArrayFlag;
-    std::vector<std::unique_ptr<childMap_t>> mapArray;
+    std::vector<std::shared_ptr<childMap_t>> mapArray;
 
     // Local Map Extraction
     PointType robotPoint;
@@ -54,7 +54,7 @@ private:
 public:
     TraversabilityMapping() : Node("traversability_mapping"),
                               tf_buffer(this->get_clock()),
-                              tf_listener(std::make_unique<tf2_ros::TransformListener>(tf_buffer, this)), // [AI修改1]
+                              tf_listener(std::make_shared<tf2_ros::TransformListener>(tf_buffer, this)), // [AI修改1]
                               pubCount(1), // [AI修改2]
                               mapArrayCount(0) // [AI修改2]
     {

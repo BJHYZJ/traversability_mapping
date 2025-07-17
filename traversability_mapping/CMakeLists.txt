@@ -74,19 +74,29 @@ ament_target_dependencies(traversability_map
 )
 
 # PRM Planner
-# add_executable(traversability_prm
-#   src/traversability_prm.cpp
-#   src/library/kdtree.c
-# )
-# ament_target_dependencies(traversability_prm
-#   rclcpp
-#   sensor_msgs
-#   geometry_msgs
-#   elevation_msgs
-#   pcl_conversions
-#   pcl_ros
-#   OpenCV
-# )
+add_executable(traversability_prm
+  src/traversability_prm.cpp
+  src/library/kdtree.c
+)
+ament_target_dependencies(traversability_prm
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  visualization_msgs
+  elevation_msgs
+  tf2_ros
+  tf2_eigen
+  pcl_conversions
+  pcl_ros
+  OpenCV
+  cv_bridge
+  image_transport
+  interactive_markers
+  pluginlib
+  nav2_core
+  tf2_eigen
+)
 
 # Path Planner
 # add_executable(traversability_path
@@ -121,7 +131,7 @@ ament_target_dependencies(traversability_map
 install(TARGETS
   traversability_filter
   traversability_map
-  # traversability_prm
+  traversability_prm
   # traversability_path
   # tm_planner_lib
   DESTINATION lib/${PROJECT_NAME}

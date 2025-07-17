@@ -1,6 +1,6 @@
 #include "utility.h"
 
-class TraversabilityFilter : public rclcpp::Node
+class TraversabilityFilter : public rclcpp::Node, public std::enable_shared_from_this<TraversabilityFilter>
 {
 
 private:
@@ -21,7 +21,7 @@ private:
     // tf::TransformListener listener;
     // tf::StampedTransform transform;
     tf2_ros::Buffer tf_buffer;
-    tf2_ros::TransformListener tf_listener;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     geometry_msgs::msg::TransformStamped transform;
 
     // A few points
@@ -49,9 +49,9 @@ private:
 public:
 
     TraversabilityFilter() : Node("traversability_filter"),
-                             tf_buffer(this->get_clock()),
-                             tf_listener(tf_buffer)
+                             tf_buffer(this->get_clock())
     {
+        tf_listener = std::make_shared<tf2_ros::TransformListener>(tf_buffer, this);
         subCloud = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "/full_cloud_info",
             rclcpp::QoS(5),

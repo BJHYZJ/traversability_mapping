@@ -43,6 +43,9 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2/utils.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 
 #include <vector>
@@ -59,7 +62,9 @@
 #include <array>
 #include <thread>
 #include <mutex>
+#include <memory>
 
+#include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/interactive_marker.hpp>
 #include <visualization_msgs/msg/interactive_marker_control.hpp>
 #include <visualization_msgs/msg/interactive_marker_feedback.hpp>
@@ -70,9 +75,8 @@
 #include <interactive_markers/interactive_marker_client.hpp>
 
 
-
-// #include "planner/kdtree.h"
-// #include "planner/cubic_spline_interpolator.h"
+#include "planner/kdtree.h"
+#include "planner/cubic_spline_interpolator.h"
 
 #include <elevation_msgs/msg/occupancy_elevation.hpp>
 

@@ -1,115 +1,101 @@
 #include "utility.h"
+#include <elevation_msgs/msg/occupancy_elevation.hpp>
 
-#include "elevation_msgs/OccupancyElevation.h"
-
-
-class TraversabilityPRM{
+class TraversabilityPRM : public rclcpp::Node, public std::enable_shared_from_this<TraversabilityPRM> {
 private:
+    // tf2
+    tf2_ros::Buffer tf_buffer;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener;
+    geometry_msgs::msg::TransformStamped transform;
 
-    ros::NodeHandle nh;
+    // ROS2 publishers/subscribers
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr subGoal;
 
-    tf::TransformListener listener;
-    tf::StampedTransform transform;
-
-    ros::Subscriber subGoal;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubPRMGraph;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubPRMPath;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubGlobalPath;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubSingleSourcePaths;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloudPRMNodes;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloudPRMGraph;
     
-    ros::Publisher pubPRMGraph; // publish PRM nodes and edges
-    ros::Publisher pubPRMPath; // path extracted from roadmap
-    ros::Publisher pubGlobalPath; // path is published in pose array format 
-    ros::Publisher pubSingleSourcePaths; // publish paths to al states in roadmap
+    rclcpp::Subscription<elevation_msgs::msg::OccupancyElevation>::SharedPtr subElevationMap;
 
-    ros::Publisher pubCloudPRMNodes;
-    ros::Publisher pubCloudPRMGraph;
-
-    ros::Subscriber subElevationMap; // 2d local height map from mapping package
-
-    elevation_msgs::OccupancyElevation elevationMap; // this is received from mapping package. it is a 2d local map that includes height info
-
-    float map_min[3]; // 0 - x, 1 - y, 2 - z
+    elevation_msgs::msg::OccupancyElevation elevationMap;
+    float map_min[3];
     float map_max[3];
- 
     ///////////// Planner ////////////
     vector<state_t*> nodeList;
     vector<state_t*> pathList;
-    
-    nav_msgs::Path globalPath;
-    nav_msgs::Path displayGlobalPath;
-
+    nav_msgs::msg::Path globalPath;
+    nav_msgs::msg::Path displayGlobalPath;
     double start_time;
     double finish_time;
-
-    bool planningFlag; // set to "true" once goal is received from move_base
-
+    bool planningFlag;
     state_t *robotState;
     state_t *goalState;
     state_t *nearestGoalState;
     state_t *mapCenter;
-
     kdtree_t *kdtree;
-
     bool costUpdateFlag[NUM_COSTS];
-
     std::mutex mtx;
 
 public:
-    TraversabilityPRM():
-        nh("~"),
-        planningFlag(false){
-
+    TraversabilityPRM() : 
+        Node("traversability_prm"), 
+        tf_buffer(this->get_clock()), 
+        planningFlag(false) 
+    {
         robotState = new state_t;
         goalState = new state_t;
         mapCenter = new state_t;
+        tf_listener = std::make_shared<tf2_ros::TransformListener>(tf_buffer, this);
 
-        subGoal = nh.subscribe<geometry_msgs::PoseStamped>("/prm_goal", 5, &TraversabilityPRM::goalPosHandler, this);
-        subElevationMap = nh.subscribe<elevation_msgs::OccupancyElevation>("/occupancy_map_local_height", 5, &TraversabilityPRM::elevationMapHandler, this);     
+        subGoal = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+            "/prm_goal", rclcpp::QoS(5),
+            std::bind(&TraversabilityPRM::goalPosHandler, this, std::placeholders::_1));
+            
+        subElevationMap = this->create_subscription<elevation_msgs::msg::OccupancyElevation>(
+            "/occupancy_map_local_height", 5,
+            std::bind(&TraversabilityPRM::elevationMapHandler, this, std::placeholders::_1));
 
-        pubPRMGraph = nh.advertise<visualization_msgs::MarkerArray>("/prm_graph", 5);
-        pubPRMPath = nh.advertise<visualization_msgs::MarkerArray>("/prm_path", 5);
-        pubSingleSourcePaths = nh.advertise<visualization_msgs::MarkerArray>("/prm_single_source_paths", 5);
+        pubPRMGraph = this->create_publisher<visualization_msgs::msg::MarkerArray>("/prm_graph", rclcpp::QoS(5));
+        pubPRMPath = this->create_publisher<visualization_msgs::msg::MarkerArray>("/prm_path", rclcpp::QoS(5));
+        pubSingleSourcePaths = this->create_publisher<visualization_msgs::msg::MarkerArray>("/prm_single_source_paths", 5);
+        pubCloudPRMNodes = this->create_publisher<sensor_msgs::msg::PointCloud2>("/prm_cloud_nodes", rclcpp::QoS(5));
+        pubCloudPRMGraph = this->create_publisher<sensor_msgs::msg::PointCloud2>("/prm_cloud_graph", rclcpp::QoS(5));
+        pubGlobalPath = this->create_publisher<nav_msgs::msg::Path>("/global_path", rclcpp::QoS(5));
 
-        pubCloudPRMNodes = nh.advertise<sensor_msgs::PointCloud2>("/prm_cloud_nodes", 5);
-        pubCloudPRMGraph = nh.advertise<sensor_msgs::PointCloud2>("/prm_cloud_graph", 5);
-
-        pubGlobalPath = nh.advertise<nav_msgs::Path>("/global_path", 5);
-
-        allocateMemory(); 
+        allocateMemory();
     }
 
-    ~TraversabilityPRM(){}
+    ~TraversabilityPRM() {}
 
-    void allocateMemory(){
-
+    void allocateMemory() {
         kdtree = kd_create(3);
-
         for (int i = 0; i < NUM_COSTS; ++i)
             costUpdateFlag[i] = false;
         for (int i = 0; i < costHierarchy.size(); ++i)
             costUpdateFlag[costHierarchy[i]] = true;
     }
 
-    void elevationMapHandler(const elevation_msgs::OccupancyElevation::ConstPtr& mapMsg){
-
+    void elevationMapHandler(const elevation_msgs::msg::OccupancyElevation::SharedPtr mapMsg) {
         std::lock_guard<std::mutex> lock(mtx);
-
         elevationMap = *mapMsg;
-
         updateMapBoundary();
-
         updateCostMap();
-
         buildRoadMap();
     }
 
-    void updateMapBoundary(){
-        map_min[0] = elevationMap.occupancy.info.origin.position.x; 
+    void updateMapBoundary() {
+        map_min[0] = elevationMap.occupancy.info.origin.position.x;
         map_min[1] = elevationMap.occupancy.info.origin.position.y;
         map_min[2] = elevationMap.occupancy.info.origin.position.z;
-        map_max[0] = elevationMap.occupancy.info.origin.position.x + elevationMap.occupancy.info.resolution * elevationMap.occupancy.info.width; 
-        map_max[1] = elevationMap.occupancy.info.origin.position.y + elevationMap.occupancy.info.resolution * elevationMap.occupancy.info.height; 
+        map_max[0] = elevationMap.occupancy.info.origin.position.x + elevationMap.occupancy.info.resolution * elevationMap.occupancy.info.width;
+        map_max[1] = elevationMap.occupancy.info.origin.position.y + elevationMap.occupancy.info.resolution * elevationMap.occupancy.info.height;
         map_max[2] = elevationMap.occupancy.info.origin.position.z;
     }
 
-    void updateCostMap(){
+    void updateCostMap() {
         int sizeMap = elevationMap.occupancy.data.size();
         int inflationSize = int(costmapInflationRadius / elevationMap.occupancy.info.resolution);
         for (int i = 0; i < sizeMap; ++i) {
@@ -130,11 +116,11 @@ public:
         }
     }
 
-    void buildRoadMap(){
+    void buildRoadMap() {
         // 1. generate samples
         generateSamples();
         // 2. Add edges and update state height if map is changed
-        updateStatesAndEdges();   
+        updateStatesAndEdges();
         // 3. Planning
         bfsSearch();
         // 4. Visualize Roadmap
@@ -144,24 +130,18 @@ public:
         // 6. Convert PRM Graph into point cloud for external usage
         publishRoadmap2Cloud();
     }
-    
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////// Planner /////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    void goalPosHandler(const geometry_msgs::PoseStampedConstPtr& goal){
-    	
+    void goalPosHandler(const geometry_msgs::msg::PoseStamped::SharedPtr goal) {
         goalState->x[0] = goal->pose.position.x;
         goalState->x[1] = goal->pose.position.y;
         goalState->x[2] = goal->pose.position.z;
-        
-        // start planning
         planningFlag = true;
     }
 
-    
-    
-    bool bfsSearch(){
-
+    bool bfsSearch() {
         pathList.clear();
         globalPath.poses.clear();
         // 0. Planning or not
@@ -200,7 +180,7 @@ public:
         vector<state_t*> Queue;
         Queue.push_back(startState);
 
-        while(Queue.size() > 0 && ros::ok()){
+        while(Queue.size() > 0 && rclcpp::ok()){
             // find the state that can offer lowest cost in this depth and remove it from Queue
             state_t *fromState = minCostStateInQueue(Queue);
             Queue.erase(remove(Queue.begin(), Queue.end(), fromState), Queue.end());
@@ -298,16 +278,15 @@ public:
             toState->costsToRoot[i] = fromState->costsToRoot[i] + fromState->neighborList[neighborInd].edgeCosts[i];
     }
 
-    void smoothPath(){
-
+    void smoothPath() {
         if (pathList.size() <= 1)
             return;
         // Cubic Spline
-        nav_msgs::Path originPath;
-        nav_msgs::Path splinePath;
-        
+        nav_msgs::msg::Path originPath;
+        nav_msgs::msg::Path splinePath;
+
         originPath.header.frame_id = "map";
-        geometry_msgs::PoseStamped pose;
+        geometry_msgs::msg::PoseStamped pose;
         pose.header.frame_id = "map";
 
         originPath.poses.clear();
@@ -316,7 +295,9 @@ public:
             pose.pose.position.x = pathList[i]->x[0];
             pose.pose.position.y = pathList[i]->x[1];
             pose.pose.position.z = pathList[i]->x[2];
-            pose.pose.orientation = tf::createQuaternionMsgFromYaw(0);
+            tf2::Quaternion q;
+            q.setRPY(0, 0, 0); // yaw = 0
+            pose.pose.orientation = tf2::toMsg(q);
             originPath.poses.push_back(pose);
         }
 
@@ -325,12 +306,11 @@ public:
 
         globalPath = splinePath;
         displayGlobalPath = globalPath; // displayGlobalPath is only changed during planning
-    }    
+    }
 
-    void generateSamples(){
-
-        double sampling_start_time = ros::WallTime::now().toSec();
-        while (ros::WallTime::now().toSec() - sampling_start_time < 0.002 && ros::ok()){
+    void generateSamples() {
+        double sampling_start_time = rclcpp::Clock().now().seconds();
+        while (rclcpp::Clock().now().seconds() - sampling_start_time < 0.002 && rclcpp::ok()){
 
             state_t* newState = new state_t;
 
@@ -359,11 +339,11 @@ public:
         if (distance(stateIn->x, nearestState->x) > neighborSampleRadius
             && abs(stateIn->x[2] - nearestState->x[2]) <= neighborConnectHeight)
             return false;
-            
+
         return true;
     }
 
-    void updateStatesAndEdges(){
+    void updateStatesAndEdges() {
         getRobotState();
         // 0. find local map center
         mapCenter->x[0] = (map_min[0] + map_max[0]) / 2;
@@ -410,12 +390,12 @@ public:
                 }else{ // edge is not connectable, delete old edge if it exists
                     deleteEdge(nearStates[i], nearStates[j]);
                 }
-            } 
+            }
         }
     }
 
-    void deleteEdge(state_t* stateA, state_t* stateB){
-        // "remove" compacts the elements that differ from the value to be removed (state_in) in the beginning of the vector 
+    void deleteEdge(state_t* stateA, state_t* stateB) {
+        // "remove" compacts the elements that differ from the value to be removed (state_in) in the beginning of the vector
         // and returns the iterator to the first element after that range. Then "erase" removes these elements (who's value is unspecified).
         compareState = stateB;
         stateA->neighborList.erase(std::remove_if(stateA->neighborList.begin(), stateA->neighborList.end(), isStateExsiting), stateA->neighborList.end());
@@ -423,9 +403,7 @@ public:
         stateB->neighborList.erase(std::remove_if(stateB->neighborList.begin(), stateB->neighborList.end(), isStateExsiting), stateB->neighborList.end());
     }
 
-    
-
-    bool edgePropagation(state_t *state_from, state_t *state_to, float edgeCosts[NUM_COSTS]){
+    bool edgePropagation(state_t *state_from, state_t *state_to, float edgeCosts[NUM_COSTS]) {
         // 0. initialize edgeCosts
         for (int i = 0; i < NUM_COSTS; ++i)
             edgeCosts[i] = 0;
@@ -466,11 +444,11 @@ public:
     }
 
     // Collision check (using rounded index for input)
-    bool isIncollision(int rounded_x, int rounded_y, int index){
+    bool isIncollision(int rounded_x, int rounded_y, int index) {
         if (rounded_x < 0 || rounded_x >= localMapArrayLength ||
             rounded_y < 0 || rounded_y >= localMapArrayLength )
             return true;
-        
+
         // close to obstacles within ... m
         if (elevationMap.cost_map[index] > 0)
                 return true;
@@ -479,12 +457,12 @@ public:
             // stateIn->x is on an unknown grid
             if (elevationMap.height[index] == -FLT_MAX)
                 return true;
-        } 
+        }
 
         return false;
     }
 
-    void getNearStates(state_t *stateIn, vector<state_t*>& vectorNearStatesOut, double radius){
+    void getNearStates(state_t *stateIn, vector<state_t*>& vectorNearStatesOut, double radius) {
         kdres_t *kdres = kd_nearest_range (kdtree, stateIn->x, radius);
         vectorNearStatesOut.clear();
         // Create the vector data structure for storing the results
@@ -493,7 +471,7 @@ public:
             kd_res_free (kdres);
             return;
         }
-        // Place pointers to the near vertices into the vector 
+        // Place pointers to the near vertices into the vector
         kd_res_rewind (kdres);
         while (!kd_res_end(kdres)) {
             state_t *stateCurr = (state_t *) kd_res_item_data (kdres);
@@ -504,11 +482,10 @@ public:
         kd_res_free (kdres);
     }
 
-
-    bool sampleState(state_t *stateCurr){
+    bool sampleState(state_t *stateCurr) {
         // random x and y
         for (int i = 0; i < 2; ++i)
-            stateCurr->x[i] = (double)rand()/(RAND_MAX + 1.0)*(map_max[i] - map_min[i]) 
+            stateCurr->x[i] = (double)rand()/(RAND_MAX + 1.0)*(map_max[i] - map_min[i])
                 - (map_max[i] - map_min[i])/2.0 + (map_max[i] + map_min[i])/2.0;
         // random heading
         stateCurr->theta = (double)rand()/(RAND_MAX + 1.0) * 2 * M_PI - M_PI;
@@ -523,16 +500,16 @@ public:
         return true;
     }
 
-    double getStateHeight(state_t* stateIn){
+    double getStateHeight(state_t* stateIn) {
         int rounded_x = (int)((stateIn->x[0] - map_min[0]) / mapResolution);
         int rounded_y = (int)((stateIn->x[1] - map_min[1]) / mapResolution);
         return elevationMap.height[rounded_x + rounded_y * elevationMap.occupancy.info.width];
     }
 
     // Collision check (using state for input)
-    bool isIncollision(state_t* stateIn){
+    bool isIncollision(state_t* stateIn) {
         // if the state is outside the map, discard this state
-        if (stateIn->x[0] <= map_min[0] || stateIn->x[0] >= map_max[0] 
+        if (stateIn->x[0] <= map_min[0] || stateIn->x[0] >= map_max[0]
             || stateIn->x[1] <= map_min[1] || stateIn->x[1] >= map_max[1])
             return true;
         // if the distance to the nearest obstacle is less than xxx, in collision
@@ -543,15 +520,15 @@ public:
         // close to obstacles within ... m
         if (elevationMap.cost_map[index] > 0)
             return true;
-        
+
         return false;
     }
 
-    void insertIntoKdtree(state_t *stateCurr){
+    void insertIntoKdtree(state_t *stateCurr) {
         kd_insert(kdtree, stateCurr->x, stateCurr);
     }
 
-    state_t* getNearestState(state_t *stateIn){
+    state_t* getNearestState(state_t *stateIn) {
         kdres_t *kdres = kd_nearest(kdtree, stateIn->x);
         if (kd_res_end (kdres)){
             kd_res_free (kdres);
@@ -563,87 +540,33 @@ public:
     }
 
     // Calculate the Euclidean distance between two samples (2D)
-    float distance(double state_from[3], double state_to[3]){
-        return sqrt((state_to[0]-state_from[0])*(state_to[0]-state_from[0]) + 
+    float distance(double state_from[3], double state_to[3]) {
+        return sqrt((state_to[0]-state_from[0])*(state_to[0]-state_from[0]) +
                     (state_to[1]-state_from[1])*(state_to[1]-state_from[1]) +
                     (state_to[2]-state_from[2])*(state_to[2]-state_from[2]));
     }
 
+    void publishPRM() {
+        if (pubPRMPath->get_subscription_count() != 0){
 
-    void publishPRM(){        
-
-        // Path
-        // if (pubPRMPath.getNumSubscribers() != 0){
-
-        //     visualization_msgs::MarkerArray markerArray;
-        //     geometry_msgs::Point p;
-
-        //     // path visualization
-        //     visualization_msgs::Marker markerPath;
-        //     markerPath.header.frame_id = "map";
-        //     markerPath.header.stamp = ros::Time::now();
-        //     markerPath.action = visualization_msgs::Marker::ADD;
-        //     markerPath.type = visualization_msgs::Marker::LINE_STRIP;
-        //     markerPath.ns = "path";
-        //     markerPath.id = 0;
-        //     markerPath.scale.x = 0.2;
-        //     markerPath.color.r = 0.0; markerPath.color.g = 0; markerPath.color.b = 1.0;
-        //     markerPath.color.a = 1.0;
-
-        //     for (int i = 0; i < displayGlobalPath.poses.size(); ++i){
-        //         p.x = displayGlobalPath.poses[i].pose.position.x;
-        //         p.y = displayGlobalPath.poses[i].pose.position.y;
-        //         p.z = displayGlobalPath.poses[i].pose.position.z + 0.3;
-        //         markerPath.points.push_back(p);
-        //     }
-            
-        //     // goal point visualization
-        //     visualization_msgs::Marker markerGoal;
-        //     markerGoal.header.frame_id = "map";
-        //     markerGoal.header.stamp = ros::Time::now();
-        //     markerGoal.action = visualization_msgs::Marker::ADD;
-        //     markerGoal.type= visualization_msgs::Marker::SPHERE_LIST;
-        //     markerGoal.ns = "goal";
-        //     markerGoal.id = 1;
-        //     markerGoal.scale.x = 0.5;
-        //     markerGoal.color.r = 0.0; markerGoal.color.g = 0.0; markerGoal.color.b = 1.0;
-        //     markerGoal.color.a = 1.0;
-
-        //     if (displayGlobalPath.poses.size() != 0){
-        //         p.x = displayGlobalPath.poses.back().pose.position.x;
-        //         p.y = displayGlobalPath.poses.back().pose.position.y;
-        //         p.z = displayGlobalPath.poses.back().pose.position.z + 0.3;
-        //         markerGoal.points.push_back(p);
-        //     }
-
-        //     // push to markerarray and publish
-        //     markerArray.markers.push_back(markerPath);
-        //     markerArray.markers.push_back(markerGoal);
-        //     pubPRMPath.publish(markerArray);
-        // }
-
-
-
-        if (pubPRMPath.getNumSubscribers() != 0){
-
-            visualization_msgs::MarkerArray markerArray;
-            geometry_msgs::Point p;
+            visualization_msgs::msg::MarkerArray markerArray;
+            geometry_msgs::msg::Point p;
 
             // path visualization
-            visualization_msgs::Marker markerPath;
+            visualization_msgs::msg::Marker markerPath;
             markerPath.header.frame_id = "map";
-            markerPath.header.stamp = ros::Time::now();
-            markerPath.action = visualization_msgs::Marker::ADD;
-            markerPath.type = visualization_msgs::Marker::LINE_STRIP;
+            markerPath.header.stamp = rclcpp::Clock().now();
+            markerPath.action = visualization_msgs::msg::Marker::ADD;
+            markerPath.type = visualization_msgs::msg::Marker::LINE_STRIP;
             markerPath.ns = "path";
             markerPath.id = 0;
-            
+
             markerPath.scale.x = 0.2;
             markerPath.scale.y = 0.2;
             markerPath.scale.z = 0.2;
 
-            markerPath.color.r = 0.0; 
-            markerPath.color.g = 0; 
+            markerPath.color.r = 0.0;
+            markerPath.color.g = 0;
             markerPath.color.b = 1.0;
             markerPath.color.a = 1.0;
 
@@ -662,21 +585,21 @@ public:
             if (markerPath.points.size() >= 2) {
                 markerArray.markers.push_back(markerPath);
             } else {
-                visualization_msgs::Marker del;
+                visualization_msgs::msg::Marker del;
                 del.header.frame_id = "map";
-                del.header.stamp    = ros::Time::now();
+                del.header.stamp    = rclcpp::Clock().now();
                 del.ns              = "path";
                 del.id              = 0;
-                del.action          = visualization_msgs::Marker::DELETE;
+                del.action          = visualization_msgs::msg::Marker::DELETE;
                 markerArray.markers.push_back(del);
             }
 
             // goal point visualization
-            visualization_msgs::Marker markerGoal;
+            visualization_msgs::msg::Marker markerGoal;
             markerGoal.header.frame_id = "map";
-            markerGoal.header.stamp = ros::Time::now();
-            markerGoal.action = visualization_msgs::Marker::ADD;
-            markerGoal.type= visualization_msgs::Marker::SPHERE_LIST;
+            markerGoal.header.stamp = rclcpp::Clock().now();
+            markerGoal.action = visualization_msgs::msg::Marker::ADD;
+            markerGoal.type= visualization_msgs::msg::Marker::SPHERE_LIST;
             markerGoal.ns = "goal";
             markerGoal.id = 1;
 
@@ -684,8 +607,8 @@ public:
             markerGoal.scale.y = 0.5;
             markerGoal.scale.z = 0.5;
 
-            markerGoal.color.r = 0.0; 
-            markerGoal.color.g = 0.0; 
+            markerGoal.color.r = 0.0;
+            markerGoal.color.g = 0.0;
             markerGoal.color.b = 1.0;
             markerGoal.color.a = 1.0;
 
@@ -706,30 +629,29 @@ public:
             if (!markerGoal.points.empty()) {
                 markerArray.markers.push_back(markerGoal);
             } else {
-                visualization_msgs::Marker del;
+                visualization_msgs::msg::Marker del;
                 del.header.frame_id = "map";
-                del.header.stamp    = ros::Time::now();
+                del.header.stamp    = rclcpp::Clock().now();
                 del.ns              = "goal";
                 del.id              = 1;
-                del.action          = visualization_msgs::Marker::DELETE;
+                del.action          = visualization_msgs::msg::Marker::DELETE;
                 markerArray.markers.push_back(del);
             }
 
-            pubPRMPath.publish(markerArray);
+            pubPRMPath->publish(markerArray);
         }
 
+        if (pubPRMGraph->get_subscription_count() != 0){
 
-        if (pubPRMGraph.getNumSubscribers() != 0){
-
-            visualization_msgs::MarkerArray markerArray;
-            geometry_msgs::Point p;
+            visualization_msgs::msg::MarkerArray markerArray;
+            geometry_msgs::msg::Point p;
 
             // PRM nodes visualization
-            visualization_msgs::Marker markerNode;
+            visualization_msgs::msg::Marker markerNode;
             markerNode.header.frame_id = "map";
-            markerNode.header.stamp = ros::Time::now();
-            markerNode.action = visualization_msgs::Marker::ADD;
-            markerNode.type = visualization_msgs::Marker::SPHERE_LIST;
+            markerNode.header.stamp = rclcpp::Clock().now();
+            markerNode.action = visualization_msgs::msg::Marker::ADD;
+            markerNode.type = visualization_msgs::msg::Marker::SPHERE_LIST;
             markerNode.ns = "nodes";
             markerNode.id = 2;
             markerNode.scale.x = 0.2;
@@ -746,11 +668,11 @@ public:
             }
 
             // PRM edge visualization
-            visualization_msgs::Marker markerEdge;
+            visualization_msgs::msg::Marker markerEdge;
             markerEdge.header.frame_id = "map";
-            markerEdge.header.stamp = ros::Time::now();
-            markerEdge.action = visualization_msgs::Marker::ADD;
-            markerEdge.type = visualization_msgs::Marker::LINE_LIST;
+            markerEdge.header.stamp = rclcpp::Clock().now();
+            markerEdge.action = visualization_msgs::msg::Marker::ADD;
+            markerEdge.type = visualization_msgs::msg::Marker::LINE_LIST;
             markerEdge.ns = "edges";
             markerEdge.id = 3;
             markerEdge.scale.x = 0.05;
@@ -776,28 +698,28 @@ public:
             // push to markerarray and publish
             markerArray.markers.push_back(markerNode);
             markerArray.markers.push_back(markerEdge);
-            pubPRMGraph.publish(markerArray);
+            pubPRMGraph->publish(markerArray);
 
         }
 
         // 4. Single Source Shortest Paths
-        if (pubSingleSourcePaths.getNumSubscribers() != 0){
+        if (pubSingleSourcePaths->get_subscription_count() != 0){
 
-            visualization_msgs::MarkerArray markerArray;
-            geometry_msgs::Point p;
+            visualization_msgs::msg::MarkerArray markerArray;
+            geometry_msgs::msg::Point p;
 
              // publish empty single-source paths
             if (planningFlag == false){
-                pubSingleSourcePaths.publish(markerArray);
+                pubSingleSourcePaths->publish(markerArray);
                 return;
             }
 
             // single source path visualization
-            visualization_msgs::Marker markersPath;
+            visualization_msgs::msg::Marker markersPath;
             markersPath.header.frame_id = "map";
-            markersPath.header.stamp = ros::Time::now();
-            markersPath.action = visualization_msgs::Marker::ADD;
-            markersPath.type = visualization_msgs::Marker::LINE_LIST;
+            markersPath.header.stamp = rclcpp::Clock().now();
+            markersPath.action = visualization_msgs::msg::Marker::ADD;
+            markersPath.type = visualization_msgs::msg::Marker::LINE_LIST;
             markersPath.ns = "path";
             markersPath.id = 4;
             markersPath.scale.x = 0.05;
@@ -818,22 +740,22 @@ public:
             }
             // push to markerarray and publish
             markerArray.markers.push_back(markersPath);
-            pubSingleSourcePaths.publish(markerArray);
+            pubSingleSourcePaths->publish(markerArray);
         }
     }
 
-    void publishPathStop(){
+    void publishPathStop() {
         // even no feasible path is found, publish an empty path
         globalPath.header.frame_id = "map";
-        globalPath.header.stamp = ros::Time::now();
+        globalPath.header.stamp = rclcpp::Clock().now();
         // publish path
-        pubGlobalPath.publish(globalPath);
+        pubGlobalPath->publish(globalPath);
         // stop planning
         planningFlag = false;
     }
 
-    void publishRoadmap2Cloud(){
-        if (pubCloudPRMNodes.getNumSubscribers() == 0 && pubCloudPRMGraph.getNumSubscribers() == 0)
+    void publishRoadmap2Cloud() {
+        if (pubCloudPRMNodes->get_subscription_count() == 0 && pubCloudPRMGraph->get_subscription_count() == 0)
             return;
 
         int sizeCloud = nodeList.size();
@@ -856,41 +778,43 @@ public:
             }
         }
         // Publish
-        sensor_msgs::PointCloud2 laserCloudTemp;
+        sensor_msgs::msg::PointCloud2 laserCloudTemp;
         pcl::toROSMsg(nodeCloud, laserCloudTemp);
         laserCloudTemp.header.frame_id = "map";
-        laserCloudTemp.header.stamp = ros::Time::now();
-        pubCloudPRMNodes.publish(laserCloudTemp);
+        laserCloudTemp.header.stamp = rclcpp::Clock().now();
+        pubCloudPRMNodes->publish(laserCloudTemp);
         pcl::toROSMsg(adjacencyCloud, laserCloudTemp);
         laserCloudTemp.header.frame_id = "map";
-        laserCloudTemp.header.stamp = ros::Time::now();
-        pubCloudPRMGraph.publish(laserCloudTemp);
+        laserCloudTemp.header.stamp = rclcpp::Clock().now();
+        pubCloudPRMGraph->publish(laserCloudTemp);
     }
 
-    void getRobotState(){
-        try{listener.lookupTransform("map","base_link", ros::Time(0), transform); } 
-        catch (tf::TransformException ex){ /*ROS_ERROR("Transfrom Failure.");*/ return; }
-        robotState->x[0] = transform.getOrigin().x();
-        robotState->x[1] = transform.getOrigin().y();
-        robotState->x[2] = transform.getOrigin().z();
+    void getRobotState() {
+        try {
+            transform = tf_buffer.lookupTransform("map", "base_link", rclcpp::Time(0));
+        } catch (tf2::TransformException &ex) {
+            RCLCPP_ERROR(this->get_logger(), "Transform Failure: %s", ex.what());
+            return;
+        }
+        robotState->x[0] = transform.transform.translation.x;
+        robotState->x[1] = transform.transform.translation.y;
+        robotState->x[2] = transform.transform.translation.z;
 
         double roll, pitch, yaw;
-        tf::Matrix3x3 m(transform.getRotation());
+        tf2::Quaternion q;
+        tf2::fromMsg(transform.transform.rotation, q);
+        tf2::Matrix3x3 m(q);
         m.getRPY(roll, pitch, yaw);
         robotState->theta = yaw + M_PI; // change from -PI~PI to 0~1*PI
     }
 
 };
 
-
-int main(int argc, char** argv){
-
-    ros::init(argc, argv, "traversability_mapping");
-
-    TraversabilityPRM TPRM;
-
-    ROS_INFO("\033[1;32m---->\033[0m Traversability Planner Started.");
-
-    ros::spin();
+int main(int argc, char** argv) {
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<TraversabilityPRM>();
+    RCLCPP_INFO(node->get_logger(), "----> Traversability Planner Started.");
+    rclcpp::spin(node);
+    rclcpp::shutdown();
     return 0;
 }

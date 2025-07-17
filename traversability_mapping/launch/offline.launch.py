@@ -72,6 +72,15 @@ def generate_launch_description():
       output='screen',
       parameters=[{'use_sim_time': use_sim_time}]
   )
+
+  tprm_node = Node(
+      package='traversability_mapping',
+      executable='traversability_prm',
+      name='traversability_prm',
+      output='screen',
+      parameters=[{'use_sim_time': use_sim_time}]
+  )
+  
   
   # Rviz
   rviz_node = Node(
@@ -98,5 +107,6 @@ def generate_launch_description():
   ld.add_action(rviz_node)
   ld.add_action(tfilter_node)
   ld.add_action(tmapping_node)
+  ld.add_action(tprm_node)
 
   return ld
