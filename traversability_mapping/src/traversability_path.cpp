@@ -49,7 +49,7 @@ private:
 
     state_t *rootState;
     state_t *goalState;
-
+    // yanzhijie
 public:
     TraversabilityPath() : 
         Node("traversability_path"),
@@ -217,15 +217,14 @@ public:
         }
 
         // 2. Transform local paths to global paths
-        try{tf_buffer.lookupTransform("map","base_link", rclcpp::Time(0), transform); } 
+        try{transform = tf_buffer.lookupTransform("map","base_link", rclcpp::Time(0)); } 
         catch (tf2::TransformException ex){ /*ROS_ERROR("Transfrom Failure.");*/ return; }
 
         pathCloudLocal->header.frame_id = "base_link";
         pathCloudLocal->header.stamp = 0; // don't use the latest time, we don't have that transform in the queue yet
 
-        // Note: pcl_ros::transformPointCloud needs to be replaced with tf2_ros::transformPointCloud
-        // For now, we'll skip this transformation or implement it manually
-        *pathCloudGlobal = *pathCloudLocal;
+        // Transform point cloud from base_link to map frame
+        pcl_ros::transformPointCloud("map", *pathCloudLocal, *pathCloudGlobal, tf_buffer);
 
         // 3. Collision check
         state_t *state = new state_t;
@@ -257,7 +256,7 @@ public:
         if (pubPathLibraryValid->get_subscription_count() != 0){
             sensor_msgs::msg::PointCloud2 laserCloudTemp;
             pcl::toROSMsg(*pathCloudValid, laserCloudTemp);
-            laserCloudTemp.header.stamp = rclcpp::Time::now();
+            laserCloudTemp.header.stamp = this->now();
             laserCloudTemp.header.frame_id = "map";
             pubPathLibraryValid->publish(laserCloudTemp);
         }
@@ -266,7 +265,7 @@ public:
         if (pubPathLibraryOrigin->get_subscription_count() != 0){
             sensor_msgs::msg::PointCloud2 laserCloudTemp;
             pcl::toROSMsg(*pathCloudLocal, laserCloudTemp);
-            laserCloudTemp.header.stamp = rclcpp::Time::now();
+            laserCloudTemp.header.stamp = this->now();
             laserCloudTemp.header.frame_id = "base_link";
             pubPathLibraryOrigin->publish(laserCloudTemp);
         }
@@ -337,7 +336,7 @@ public:
             }
             sensor_msgs::msg::PointCloud2 laserCloudTemp;
             pcl::toROSMsg(*pathCloud, laserCloudTemp);
-            laserCloudTemp.header.stamp = rclcpp::Time::now();
+            laserCloudTemp.header.stamp = this->now();
             laserCloudTemp.header.frame_id = "map";
             pubPathCloud->publish(laserCloudTemp);
         }
@@ -350,13 +349,15 @@ public:
             pose.pose.position.x = pathCloudGlobal->points[pathList[i]->stateId].x;
             pose.pose.position.y = pathCloudGlobal->points[pathList[i]->stateId].y;
             pose.pose.position.z = pathCloudGlobal->points[pathList[i]->stateId].z;
-            pose.pose.orientation = tf::createQuaternionMsgFromYaw(0);
+            tf2::Quaternion q;
+            q.setRPY(0, 0, 0); // yaw = 0
+            pose.pose.orientation = tf2::toMsg(q);
             globalPath.poses.push_back(pose);
         }
 
         // publish path
         globalPath.header.frame_id = "map";
-        globalPath.header.stamp = rclcpp::Time::now();
+        globalPath.header.stamp = this->now();
         pubGlobalPath->publish(globalPath);
 
         planningFlag = false;
@@ -398,7 +399,7 @@ public:
     void publishPath(){
         sensor_msgs::msg::PointCloud2 laserCloudTemp;
         pcl::toROSMsg(*pathCloudValid, laserCloudTemp);
-        laserCloudTemp.header.stamp = rclcpp::Time::now();
+        laserCloudTemp.header.stamp = this->now();
         laserCloudTemp.header.frame_id = "base_link";
         pubPathLibraryValid->publish(laserCloudTemp);
     }
@@ -409,9 +410,9 @@ int main(int argc, char** argv){
 
     rclcpp::init(argc, argv);
     
-    TraversabilityPath tPath;
+    auto tPath = std::make_shared<TraversabilityPath>();
 
-    RCLCPP_INFO(tPath.get_logger(), "\033[1;32m---->\033[0m Traversability Planner Started.");
+    RCLCPP_INFO(tPath->get_logger(), "\033[1;32m---->\033[0m Traversability Planner Started.");
 
     rclcpp::spin(tPath);
 

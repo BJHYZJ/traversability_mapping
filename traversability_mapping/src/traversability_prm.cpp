@@ -1,5 +1,4 @@
 #include "utility.h"
-#include <elevation_msgs/msg/occupancy_elevation.hpp>
 
 class TraversabilityPRM : public rclcpp::Node, public std::enable_shared_from_this<TraversabilityPRM> {
 private:

@@ -99,18 +99,28 @@ ament_target_dependencies(traversability_prm
 )
 
 # Path Planner
-# add_executable(traversability_path
-#   src/traversability_path.cpp
-# )
-# ament_target_dependencies(traversability_path
-#   rclcpp
-#   sensor_msgs
-#   geometry_msgs
-#   elevation_msgs
-#   pcl_conversions
-#   pcl_ros
-#   OpenCV
-# )
+add_executable(traversability_path
+  src/traversability_path.cpp
+)
+ament_target_dependencies(traversability_path
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  visualization_msgs
+  elevation_msgs
+  tf2_ros
+  tf2_eigen
+  pcl_conversions
+  pcl_ros
+  OpenCV
+  cv_bridge
+  image_transport
+  interactive_markers
+  pluginlib
+  nav2_core
+  tf2_eigen
+)
 
 
 # move_base Planner Plugin
@@ -132,7 +142,7 @@ install(TARGETS
   traversability_filter
   traversability_map
   traversability_prm
-  # traversability_path
+  traversability_path
   # tm_planner_lib
   DESTINATION lib/${PROJECT_NAME}
 )
