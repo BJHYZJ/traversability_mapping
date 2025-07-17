@@ -90,8 +90,8 @@ typedef struct kdres kdres_t;
 // Environment
 extern const bool urbanMapping = true;
 
-// VLP-16
-extern const int N_SCAN = 16;
+// VLP-16 / hesai lidar 32 lines
+extern const int N_SCAN = 32;
 extern const int Horizon_SCAN = 1800;
 
 // Map Params
